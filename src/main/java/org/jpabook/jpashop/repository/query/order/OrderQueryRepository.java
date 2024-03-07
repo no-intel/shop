@@ -5,6 +5,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Repository
 @RequiredArgsConstructor
@@ -19,6 +21,34 @@ public class OrderQueryRepository {
             o.setOrderItems(orderItems);
         });
         return result;
+    }
+
+    public List<OrderQueryDto> findAllByDto_optimization() {
+        List<OrderQueryDto> result = findOrders();
+
+        Map<Long, List<OrderQueryItemDto>> orderItemMap = findOrderItemMap(toOrderIds(result));
+
+        result.forEach(o -> o.setOrderItems(orderItemMap.get(o.getOrderId())));
+        return result;
+    }
+
+    private Map<Long, List<OrderQueryItemDto>> findOrderItemMap(List<Long> orderIds) {
+        List<OrderQueryItemDto> orderItems = em.createQuery(
+                        "SELECT new org.jpabook.jpashop.repository.query.order.OrderQueryItemDto(oi.order.id, i.name, oi.orderPrice, oi.count) FROM OrderItem oi" +
+                                " JOIN oi.item i" +
+                                " WHERE oi.order.id in :orderIds", OrderQueryItemDto.class)
+                .setParameter("orderIds", orderIds)
+                .getResultList();
+
+        Map<Long, List<OrderQueryItemDto>> orderItemMap = orderItems.stream()
+                .collect(Collectors.groupingBy(OrderQueryItemDto::getOrderId));
+        return orderItemMap;
+    }
+
+    private static List<Long> toOrderIds(List<OrderQueryDto> result) {
+        return result.stream()
+                .map(OrderQueryDto::getOrderId)
+                .collect(Collectors.toList());
     }
 
     private List<OrderQueryItemDto> findOrderItems(Long orderId) {
@@ -37,4 +67,5 @@ public class OrderQueryRepository {
                                 " JOIN o.delivery d", OrderQueryDto.class)
                 .getResultList();
     }
+
 }
